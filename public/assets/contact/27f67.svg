@@ -1,0 +1,10 @@
+<svg preserveAspectRatio="none" overflow="visible" style="display: block;" width="40" height="40" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g id="icon">
+<circle id="Ellipse 800" cx="20" cy="20" r="20" fill="#141718"/>
+<g id="outline/store 01">
+<path id="Rectangle 743" d="M28 20V26C28 28.2091 26.2091 30 24 30H16C13.7909 30 12 28.2091 12 26V20" stroke="#FEFEFE" stroke-width="1.5" stroke-linejoin="round"/>
+<path id="Vector" d="M24.7687 10H15.2313C13.4139 10 11.7796 11.2448 11.1047 13.143L10.3467 15.2749C10.1173 15.9202 9.95866 16.6107 10.126 17.2749C10.5224 18.8478 11.8082 20 13.3333 20C15.1743 20 16.6667 18.3211 16.6667 16.25C16.6667 18.3211 18.1591 20 20 20C21.841 20 23.3333 18.3211 23.3333 16.25C23.3333 18.3211 24.8257 20 26.6667 20C28.1918 20 29.4776 18.8478 29.874 17.2749C30.0413 16.6107 29.8827 15.9202 29.6533 15.2749L28.8953 13.143C28.2204 11.2448 26.5861 10 24.7687 10Z" stroke="#FEFEFE" stroke-width="1.5" stroke-linejoin="round"/>
+<path id="Rectangle 744" d="M17 27C17 25.3431 18.3431 24 20 24C21.6569 24 23 25.3431 23 27V30H17V27Z" stroke="#FEFEFE" stroke-width="1.5" stroke-linejoin="round"/>
+</g>
+</g>
+</svg>
