@@ -495,13 +495,16 @@ function Storefront() {
   }, [searchParams])
   const [cart, setCart] = useState<Array<{ product: Product; quantity: number }>>(() => {
     try {
-      const saved = localStorage.getItem("3legant_cart")
-      if (saved) return JSON.parse(saved)
+      const version = localStorage.getItem("3legant_cart_version")
+      if (version === "v2") {
+        const saved = localStorage.getItem("3legant_cart")
+        if (saved) return JSON.parse(saved)
+      } else {
+        localStorage.setItem("3legant_cart_version", "v2")
+        localStorage.removeItem("3legant_cart")
+      }
     } catch {}
-    return [
-      { product: products[0], quantity: 1 },
-      { product: products[1], quantity: 1 },
-    ]
+    return []
   })
 
   useEffect(() => {
