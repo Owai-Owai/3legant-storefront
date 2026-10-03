@@ -29,6 +29,13 @@ import {
 import { useAuth, AuthProvider } from "@/lib/AuthContext"
 import { supabase, isSupabaseConfigured } from "@/lib/supabase"
 import { sendOrderConfirmationEmail } from "@/lib/email"
+import {
+  getOrCreateUserCart,
+  loadRemoteCartItems,
+  syncItemToRemoteCart,
+  removeRemoteCartItem,
+  clearRemoteCart,
+} from "@/lib/cartSync"
 
 const assetPathPrefix = "/assets/furniture"
 const asset = (filename: string) => `${assetPathPrefix}/${filename}`
@@ -560,6 +567,83 @@ function Storefront() {
     setInfo({ title, text })
     setModal("info")
   }
+  const [userCartId, setUserCartId] = useState<string | null>(null)
+
+  // Real-time bidirectional cart sync with Supabase
+  useEffect(() => {
+    if (!isConfigured || !user) {
+      setUserCartId(null)
+      return
+    }
+
+    let activeChannel: any = null
+
+    async function initCartSync() {
+      const cartId = await getOrCreateUserCart(user!.id)
+      if (!cartId) return
+      setUserCartId(cartId)
+
+      // Fetch remote items
+      const remoteItems = await loadRemoteCartItems(cartId)
+      if (remoteItems.length > 0) {
+        setCart(remoteItems)
+      } else if (cart.length > 0) {
+        for (const item of cart) {
+          await syncItemToRemoteCart(cartId, item.product, item.quantity, productImage(item.product), cart)
+        }
+      }
+
+      // Listen for instant real-time changes
+      activeChannel = supabase
+        .channel(`cart-sync-${cartId}`)
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'cart_items',
+            filter: `cart_id=eq.${cartId}`,
+          },
+          async () => {
+            const updated = await loadRemoteCartItems(cartId)
+            setCart(updated)
+          }
+        )
+        .subscribe()
+    }
+
+    initCartSync()
+
+    return () => {
+      if (activeChannel) {
+        supabase.removeChannel(activeChannel)
+      }
+    }
+  }, [user, isConfigured])
+
+  const updateCartQuantity = (id: string, quantity: number) => {
+    setCart((current) =>
+      current.map((item) =>
+        item.product.id === id
+          ? { ...item, quantity: Math.max(1, quantity) }
+          : item,
+      ),
+    )
+    if (userCartId) {
+      const item = cart.find((i) => i.product.id === id)
+      if (item) {
+        syncItemToRemoteCart(userCartId, item.product, quantity - item.quantity, productImage(item.product), cart)
+      }
+    }
+  }
+
+  const removeCartItem = (id: string) => {
+    setCart((current) => current.filter((item) => item.product.id !== id))
+    if (userCartId) {
+      removeRemoteCartItem(userCartId, id)
+    }
+  }
+
   const save = (product: Product) =>
     setWishlist((current) =>
       current.includes(product.id)
@@ -576,6 +660,9 @@ function Storefront() {
           )
         : [...current, { product, quantity }],
     )
+    if (userCartId) {
+      syncItemToRemoteCart(userCartId, product, quantity, productImage(product), cart)
+    }
     setNotice(`${product.name} added to your cart`)
   }
   const openProduct = (product: Product) => {
