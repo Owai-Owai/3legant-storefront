@@ -17,46 +17,100 @@
       color: #141718;
       text-align: center;
       padding: 24px;
+      box-sizing: border-box;
     }
     .spinner {
-      width: 40px;
-      height: 40px;
+      width: 44px;
+      height: 44px;
       border: 3px solid #E8ECEF;
       border-top-color: #141718;
       border-radius: 50%;
       animation: spin 0.8s linear infinite;
-      margin-bottom: 20px;
+      margin-bottom: 24px;
     }
     @keyframes spin {
       to { transform: rotate(360deg); }
     }
     h2 {
-      font-size: 20px;
+      font-size: 22px;
+      font-weight: 700;
       margin: 0 0 8px;
     }
     p {
       color: #6C7275;
       font-size: 14px;
-      margin: 0;
+      margin: 0 0 24px;
+    }
+    .btn {
+      display: none;
+      background-color: #141718;
+      color: #ffffff;
+      padding: 14px 28px;
+      border-radius: 8px;
+      font-size: 15px;
+      font-weight: 600;
+      text-decoration: none;
+      border: none;
+      cursor: pointer;
     }
   </style>
 </head>
 <body>
   <div class="spinner"></div>
-  <h2>Completing Sign In...</h2>
-  <p>Returning you to the 3legant app</p>
+  <h2>Authentication Successful!</h2>
+  <p id="status-text">Returning you to the 3legant mobile app...</p>
+  <button id="return-btn" class="btn">Open 3legant App</button>
 
   <script>
     (function() {
-      // Capture tokens from hash or query
       var hash = window.location.hash || '';
       var search = window.location.search || '';
-      var params = hash || search;
+      var urlParams = new URLSearchParams(search);
+      var appRedirect = urlParams.get('app_redirect');
 
-      // Deep link back to the mobile app scheme as a secondary fallback
-      if (params) {
-        window.location.href = '3legant://auth/callback' + params;
+      // Tokens can be in hash (#access_token=...) or query (?code=...)
+      var rawTokens = hash ? hash.replace(/^#/, '') : '';
+
+      var destination = '';
+
+      if (appRedirect) {
+        var base = decodeURIComponent(appRedirect);
+        if (rawTokens) {
+          var joinChar = base.indexOf('#') !== -1 ? '&' : '#';
+          destination = base + joinChar + rawTokens;
+        } else {
+          // If code is in search query
+          urlParams.delete('app_redirect');
+          var restQuery = urlParams.toString();
+          var joinQuery = base.indexOf('?') !== -1 ? '&' : '?';
+          destination = base + (restQuery ? (joinQuery + restQuery) : '');
+        }
+      } else {
+        // Fallback to custom mobile scheme
+        destination = '3legant://auth/callback' + (hash || search);
       }
+
+      function go() {
+        if (destination) {
+          window.location.href = destination;
+        }
+      }
+
+      // Try instant redirect
+      go();
+
+      // Show fallback button after 800ms if browser blocked automatic redirect
+      setTimeout(function() {
+        var btn = document.getElementById('return-btn');
+        if (btn) {
+          btn.style.display = 'inline-block';
+          btn.onclick = go;
+        }
+        var status = document.getElementById('status-text');
+        if (status) {
+          status.innerText = "Tap the button below to return to the app:";
+        }
+      }, 800);
     })();
   </script>
 </body>

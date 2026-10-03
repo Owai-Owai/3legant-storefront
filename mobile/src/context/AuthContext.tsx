@@ -126,8 +126,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const signInWithGoogle = async (): Promise<{ error: Error | null }> => {
     try {
-      const redirectUrl = OAUTH_REDIRECT_URL
-      console.log('[AuthContext] Initiating Google OAuth with redirectUrl:', redirectUrl)
+      const mobileReturnUrl = Linking.createURL('auth/callback')
+      const redirectUrl = `https://3legant-storefront.vercel.app/auth-callback.html?app_redirect=${encodeURIComponent(
+        mobileReturnUrl
+      )}`
+      console.log('[AuthContext] Initiating Google OAuth via bridge:', redirectUrl)
 
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
@@ -140,7 +143,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (error) return { error: error as Error }
       if (!data?.url) return { error: new Error('Failed to retrieve authentication URL') }
 
-      const authSessionResult = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl)
+      const authSessionResult = await WebBrowser.openAuthSessionAsync(data.url, mobileReturnUrl)
 
       if (authSessionResult.type === 'success' && authSessionResult.url) {
         const urlStr = authSessionResult.url
