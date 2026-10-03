@@ -1,31 +1,52 @@
-import AsyncStorage from '@react-native-async-storage/async-storage'
+import * as SecureStore from 'expo-secure-store'
+import { Platform } from 'react-native'
 
-const memoryStore: Record<string, string> = {}
+const memoryFallback: Record<string, string> = {}
 
 export const safeStorage = {
   getItem: async (key: string): Promise<string | null> => {
     try {
-      const val = await AsyncStorage.getItem(key)
+      if (Platform.OS === 'web') {
+        if (typeof localStorage !== 'undefined') {
+          return localStorage.getItem(key)
+        }
+        return memoryFallback[key] ?? null
+      }
+      const val = await SecureStore.getItemAsync(key)
       if (val !== null) return val
-      return memoryStore[key] ?? null
-    } catch (e) {
-      return memoryStore[key] ?? null
+      return memoryFallback[key] ?? null
+    } catch {
+      return memoryFallback[key] ?? null
     }
   },
+
   setItem: async (key: string, value: string): Promise<void> => {
-    memoryStore[key] = value
+    memoryFallback[key] = value
     try {
-      await AsyncStorage.setItem(key, value)
-    } catch (e) {
-      // In-memory fallback prevents native module crash
+      if (Platform.OS === 'web') {
+        if (typeof localStorage !== 'undefined') {
+          localStorage.setItem(key, value)
+        }
+        return
+      }
+      await SecureStore.setItemAsync(key, value)
+    } catch {
+      // Memory fallback preserves session in memory
     }
   },
+
   removeItem: async (key: string): Promise<void> => {
-    delete memoryStore[key]
+    delete memoryFallback[key]
     try {
-      await AsyncStorage.removeItem(key)
-    } catch (e) {
-      // In-memory fallback
+      if (Platform.OS === 'web') {
+        if (typeof localStorage !== 'undefined') {
+          localStorage.removeItem(key)
+        }
+        return
+      }
+      await SecureStore.deleteItemAsync(key)
+    } catch {
+      // Memory fallback
     }
   },
 }
