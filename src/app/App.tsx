@@ -662,6 +662,13 @@ function Storefront() {
     )
     if (userCartId) {
       syncItemToRemoteCart(userCartId, product, quantity, productImage(product), cart)
+    } else if (user) {
+      getOrCreateUserCart(user.id).then((newCartId) => {
+        if (newCartId) {
+          setUserCartId(newCartId)
+          syncItemToRemoteCart(newCartId, product, quantity, productImage(product), cart)
+        }
+      })
     }
     setNotice(`${product.name} added to your cart`)
   }

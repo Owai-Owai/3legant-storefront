@@ -108,14 +108,20 @@ export async function syncItemToRemoteCart(
       .maybeSingle()
 
     if (existingRow?.id) {
-      await (supabase.from("cart_items") as any)
+      const { error: updateError } = await (supabase.from("cart_items") as any)
         .update({
           quantity: newQty,
           updated_at: new Date().toISOString(),
         })
         .eq("id", existingRow.id)
+
+      if (updateError) {
+        console.error("[CartSync] Failed to update remote cart item:", updateError)
+      } else {
+        console.log("[CartSync] Updated remote cart item quantity:", product.name, newQty)
+      }
     } else {
-      await (supabase.from("cart_items") as any).insert({
+      const { error: insertError } = await (supabase.from("cart_items") as any).insert({
         cart_id: cartId,
         product_id: product.id,
         name: product.name,
@@ -124,6 +130,12 @@ export async function syncItemToRemoteCart(
         image: productImageSrc,
         quantity: newQty,
       })
+
+      if (insertError) {
+        console.error("[CartSync] Failed to insert remote cart item:", insertError)
+      } else {
+        console.log("[CartSync] Inserted new item into remote cart:", product.name)
+      }
     }
   } catch (err) {
     console.error("[CartSync] Failed to sync item to remote cart:", err)
