@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react'
-import AsyncStorage from '@react-native-async-storage/async-storage'
+import { safeStorage } from '../lib/storage'
 import { supabase } from '../lib/supabase'
 import { useAuth } from './AuthContext'
 import { Product, CartItem } from '../types'
@@ -117,7 +117,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!user) {
       // Unauthenticated: load from local storage
       setCartId(null)
-      AsyncStorage.getItem(LOCAL_CART_KEY).then((stored) => {
+      safeStorage.getItem(LOCAL_CART_KEY).then((stored) => {
         if (isMounted && stored) {
           try {
             setCart(JSON.parse(stored))
@@ -180,7 +180,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Save guest cart to AsyncStorage when unauthenticated
   useEffect(() => {
     if (!user) {
-      AsyncStorage.setItem(LOCAL_CART_KEY, JSON.stringify(cart)).catch(() => {})
+      safeStorage.setItem(LOCAL_CART_KEY, JSON.stringify(cart)).catch(() => {})
     }
   }, [cart, user])
 
@@ -308,7 +308,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         console.warn('[CartContext] Failed to clear remote cart:', err)
       }
     } else {
-      await AsyncStorage.removeItem(LOCAL_CART_KEY)
+      await safeStorage.removeItem(LOCAL_CART_KEY)
     }
   }
 
