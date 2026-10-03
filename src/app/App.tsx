@@ -713,6 +713,15 @@ function Storefront() {
 
   if (pathname === "/signup") return <SignUpPage onPreviewLogin={previewLogin} />
   if (pathname === "/signin") return <SignInPage onPreviewLogin={previewLogin} />
+  if (pathname === "/auth/callback" || pathname === "/auth-callback.html") {
+    return (
+      <div className="flex min-h-dvh flex-col items-center justify-center bg-white text-center p-6">
+        <div className="size-10 animate-spin rounded-full border-4 border-gray-200 border-t-black mb-4" />
+        <h2 className="text-xl font-bold">Signing you into 3legant...</h2>
+        <p className="text-sm text-gray-500 mt-2">Returning you to the app</p>
+      </div>
+    )
+  }
 
   return (
     <div
@@ -2059,6 +2068,8 @@ const router = createBrowserRouter([
       { path: "contact", element: null },
       { path: "signup", element: null },
       { path: "signin", element: null },
+      { path: "auth/callback", element: null },
+      { path: "auth-callback.html", element: null },
       { path: articleDetailPath.slice(1), element: null },
       { path: "cart", element: null },
       { path: "checkout", element: null },
@@ -2068,6 +2079,7 @@ const router = createBrowserRouter([
       { path: "account/address", element: null },
       { path: "account/wishlist", element: null },
       { path: "product/:productId", element: null },
+      { path: "*", element: null },
     ],
   },
 ])
