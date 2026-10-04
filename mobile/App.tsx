@@ -129,6 +129,7 @@ function MainContent() {
             onNavigateToSignIn={() => setAuthModal('signin')}
             onNavigateToSignUp={() => setAuthModal('signup')}
             onNavigateToShop={() => setActiveTab('shop')}
+            onSelectProduct={handleSelectProduct}
           />
         )
     }

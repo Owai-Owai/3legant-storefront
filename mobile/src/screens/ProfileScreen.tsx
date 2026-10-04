@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useState } from 'react'
 import {
   View,
   Text,
@@ -19,20 +19,30 @@ import {
 } from 'lucide-react-native'
 import { useAuth } from '../context/AuthContext'
 import { useCart } from '../context/CartContext'
+import { Product } from '../types'
+import { OrdersHistoryView } from './account/OrdersHistoryView'
+import { ShippingAddressesView } from './account/ShippingAddressesView'
+import { WishlistView } from './account/WishlistView'
+import { AccountSecurityView } from './account/AccountSecurityView'
+
+type AccountSubPage = 'overview' | 'orders' | 'addresses' | 'wishlist' | 'security'
 
 interface ProfileScreenProps {
   onNavigateToSignIn: () => void
   onNavigateToSignUp: () => void
   onNavigateToShop: () => void
+  onSelectProduct?: (product: Product) => void
 }
 
 export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   onNavigateToSignIn,
   onNavigateToSignUp,
   onNavigateToShop,
+  onSelectProduct,
 }) => {
   const { user, signOut } = useAuth()
   const { cartCount } = useCart()
+  const [subPage, setSubPage] = useState<AccountSubPage>('overview')
 
   const handleSignOut = () => {
     Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
@@ -45,6 +55,42 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
         },
       },
     ])
+  }
+
+  // Handle subpage routing
+  if (subPage === 'orders') {
+    return (
+      <OrdersHistoryView
+        onBack={() => setSubPage('overview')}
+        onNavigateToShop={onNavigateToShop}
+      />
+    )
+  }
+
+  if (subPage === 'addresses') {
+    return (
+      <ShippingAddressesView
+        onBack={() => setSubPage('overview')}
+      />
+    )
+  }
+
+  if (subPage === 'wishlist') {
+    return (
+      <WishlistView
+        onBack={() => setSubPage('overview')}
+        onNavigateToShop={onNavigateToShop}
+        onSelectProduct={onSelectProduct}
+      />
+    )
+  }
+
+  if (subPage === 'security') {
+    return (
+      <AccountSecurityView
+        onBack={() => setSubPage('overview')}
+      />
+    )
   }
 
   const displayName =
@@ -76,7 +122,11 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
           <View style={styles.menuSection}>
             <Text style={styles.menuSectionTitle}>My Account</Text>
 
-            <TouchableOpacity style={styles.menuItem} activeOpacity={0.7}>
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => setSubPage('orders')}
+              activeOpacity={0.7}
+            >
               <View style={styles.menuItemLeft}>
                 <ShoppingBag size={20} color="#141718" />
                 <Text style={styles.menuItemText}>Orders History</Text>
@@ -84,7 +134,11 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
               <ChevronRight size={18} color="#6C7275" />
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.menuItem} activeOpacity={0.7}>
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => setSubPage('addresses')}
+              activeOpacity={0.7}
+            >
               <View style={styles.menuItemLeft}>
                 <MapPin size={20} color="#141718" />
                 <Text style={styles.menuItemText}>Shipping Addresses</Text>
@@ -92,7 +146,11 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
               <ChevronRight size={18} color="#6C7275" />
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.menuItem} activeOpacity={0.7}>
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => setSubPage('wishlist')}
+              activeOpacity={0.7}
+            >
               <View style={styles.menuItemLeft}>
                 <Heart size={20} color="#141718" />
                 <Text style={styles.menuItemText}>Wishlist</Text>
@@ -100,7 +158,11 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
               <ChevronRight size={18} color="#6C7275" />
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.menuItem} activeOpacity={0.7}>
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => setSubPage('security')}
+              activeOpacity={0.7}
+            >
               <View style={styles.menuItemLeft}>
                 <ShieldCheck size={20} color="#141718" />
                 <Text style={styles.menuItemText}>Account Security</Text>
@@ -162,25 +224,26 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FAFAFA',
   },
   profileHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     padding: 20,
-    borderBottomWidth: StyleSheet.hairlineWidth,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
     borderBottomColor: '#E8ECEF',
-    gap: 16,
   },
   avatar: {
     width: 64,
     height: 64,
     borderRadius: 32,
-    backgroundColor: '#F3F5F7',
-    alignItems: 'center',
+    backgroundColor: '#F3F4F6',
     justifyContent: 'center',
+    alignItems: 'center',
   },
   userInfo: {
+    marginLeft: 16,
     flex: 1,
   },
   userName: {
@@ -196,40 +259,38 @@ const styles = StyleSheet.create({
   syncBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F0FDF4',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 12,
-    alignSelf: 'flex-start',
     marginTop: 6,
     gap: 4,
   },
   syncBadgeText: {
     fontSize: 11,
-    color: '#15803D',
+    color: '#38CB89',
     fontWeight: '600',
   },
   menuSection: {
-    paddingHorizontal: 16,
-    paddingTop: 20,
+    marginTop: 16,
+    backgroundColor: '#FFFFFF',
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+    borderColor: '#E8ECEF',
+    paddingHorizontal: 20,
   },
   menuSectionTitle: {
     fontSize: 12,
-    fontWeight: '700',
-    textTransform: 'uppercase',
+    fontWeight: '600',
     color: '#6C7275',
-    letterSpacing: 1,
-    marginBottom: 8,
-    paddingHorizontal: 4,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    paddingTop: 16,
+    paddingBottom: 8,
   },
   menuItem: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingVertical: 16,
-    paddingHorizontal: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#E8ECEF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
   },
   menuItemLeft: {
     flexDirection: 'row',
@@ -238,19 +299,19 @@ const styles = StyleSheet.create({
   },
   menuItemText: {
     fontSize: 15,
-    fontWeight: '500',
+    fontWeight: '600',
     color: '#141718',
   },
   signOutButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    marginHorizontal: 16,
-    marginTop: 28,
-    paddingVertical: 14,
-    borderRadius: 8,
-    backgroundColor: '#FEE2E2',
     gap: 8,
+    marginHorizontal: 20,
+    marginTop: 24,
+    paddingVertical: 14,
+    backgroundColor: '#FEE2E2',
+    borderRadius: 10,
   },
   signOutText: {
     color: '#DC2626',
@@ -260,16 +321,16 @@ const styles = StyleSheet.create({
   guestContainer: {
     alignItems: 'center',
     padding: 32,
-    paddingTop: 48,
+    marginTop: 20,
   },
   guestIconCircle: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: '#F3F5F7',
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    backgroundColor: '#F3F4F6',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 18,
+    marginBottom: 20,
   },
   guestTitle: {
     fontSize: 22,
@@ -281,50 +342,48 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#6C7275',
     textAlign: 'center',
-    lineHeight: 20,
+    lineHeight: 22,
     marginBottom: 28,
   },
   primaryButton: {
-    width: '100%',
-    height: 48,
     backgroundColor: '#141718',
-    borderRadius: 8,
+    width: '100%',
+    paddingVertical: 15,
+    borderRadius: 10,
     alignItems: 'center',
-    justifyContent: 'center',
     marginBottom: 12,
   },
   primaryButtonText: {
     color: '#FFFFFF',
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '600',
   },
   secondaryButton: {
-    width: '100%',
-    height: 48,
+    backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#141718',
-    borderRadius: 8,
+    borderColor: '#CBCBCB',
+    width: '100%',
+    paddingVertical: 15,
+    borderRadius: 10,
     alignItems: 'center',
-    justifyContent: 'center',
   },
   secondaryButtonText: {
     color: '#141718',
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '600',
   },
   footer: {
     alignItems: 'center',
-    marginTop: 36,
+    marginTop: 32,
   },
   footerText: {
     fontSize: 12,
-    color: '#A0A0A0',
+    color: '#9CA3AF',
     fontWeight: '500',
   },
   footerSubtext: {
     fontSize: 11,
-    color: '#38CB89',
+    color: '#9CA3AF',
     marginTop: 2,
-    fontWeight: '500',
   },
 })
