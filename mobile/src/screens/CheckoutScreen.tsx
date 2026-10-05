@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import {
   View,
   Text,
@@ -7,15 +7,32 @@ import {
   TextInput,
   TouchableOpacity,
   ActivityIndicator,
+  Alert,
 } from 'react-native'
-import { ArrowLeft, CheckCircle2, ShieldCheck, CreditCard } from 'lucide-react-native'
+import {
+  ArrowLeft,
+  CheckCircle2,
+  ShieldCheck,
+  CreditCard,
+  Lock,
+} from 'lucide-react-native'
+import * as WebBrowser from 'expo-web-browser'
 import { useCart } from '../context/CartContext'
 import { useAuth } from '../context/AuthContext'
+import { supabase } from '../lib/supabase'
+import { safeStorage } from '../lib/storage'
+import {
+  initializePaystackCheckout,
+  verifyPaystackPayment,
+  PAYSTACK_CALLBACK_URL,
+} from '../lib/paystack'
 
 interface CheckoutScreenProps {
   onBack: () => void
   onOrderComplete: () => void
 }
+
+const ADDRESS_STORAGE_KEY = '@3legant_saved_addresses'
 
 export const CheckoutScreen: React.FC<CheckoutScreenProps> = ({
   onBack,
@@ -39,20 +56,149 @@ export const CheckoutScreen: React.FC<CheckoutScreenProps> = ({
   const shippingCost = subtotal > 200 || subtotal === 0 ? 0 : 15
   const total = subtotal + shippingCost
 
+  // Pre-fill address from saved user addresses if available
+  useEffect(() => {
+    safeStorage.getItem(ADDRESS_STORAGE_KEY).then((stored) => {
+      if (stored) {
+        try {
+          const parsed = JSON.parse(stored)
+          const shipping = parsed.shipping || parsed.billing
+          if (shipping) {
+            if (shipping.fullName && !fullName) setFullName(shipping.fullName)
+            if (shipping.street) setStreet(shipping.street)
+            if (shipping.city) setCity(shipping.city)
+            if (shipping.state) setStateName(shipping.state)
+          }
+        } catch {
+          // ignore
+        }
+      }
+    })
+  }, [])
+
   const handlePlaceOrder = async () => {
+    if (!fullName.trim()) {
+      Alert.alert('Missing Name', 'Please provide your full name.')
+      return
+    }
+    if (!email.trim() || !email.includes('@')) {
+      Alert.alert('Missing Email', 'Please provide a valid email address for your order receipt.')
+      return
+    }
+    if (!street.trim() || !city.trim()) {
+      Alert.alert('Missing Address', 'Please provide your street address and city for shipping.')
+      return
+    }
+
     setIsSubmitting(true)
 
-    // Simulate order placement
-    await new Promise((resolve) => setTimeout(resolve, 1500))
+    // Generate unique order reference
+    const reference = `3LEG_${Date.now()}_${Math.floor(1000 + Math.random() * 9000)}`
 
-    const generatedCode = `#3LEG-${Math.floor(100000 + Math.random() * 900000)}`
-    setOrderCode(generatedCode)
+    try {
+      console.log('[Checkout] Initializing Paystack transaction with reference:', reference)
+      const initResult = await initializePaystackCheckout({
+        email: email.trim(),
+        amountUSD: total,
+        reference,
+        fullName: fullName.trim(),
+      })
 
-    // Clear cart both locally and in remote Supabase database!
-    await clearCart()
+      if (!initResult.success || !initResult.authorizationUrl) {
+        Alert.alert('Payment Error', initResult.error || 'Failed to initialize Paystack gateway.')
+        setIsSubmitting(false)
+        return
+      }
 
-    setIsSubmitting(false)
-    setIsSuccess(true)
+      console.log('[Checkout] Opening Paystack authorization URL in in-app browser...')
+      const browserResult = await WebBrowser.openAuthSessionAsync(
+        initResult.authorizationUrl,
+        PAYSTACK_CALLBACK_URL
+      )
+
+      console.log('[Checkout] In-app browser closed with result:', browserResult.type)
+
+      // Verify payment directly with Paystack API
+      console.log('[Checkout] Verifying transaction on Paystack:', reference)
+      const verifyResult = await verifyPaystackPayment(reference)
+
+      if (verifyResult.verified && verifyResult.status === 'success') {
+        console.log('[Checkout] Payment verified successfully!')
+
+        // 1. Create order record in Supabase
+        if (user) {
+          try {
+            const { data: orderData, error: orderErr } = await (supabase.from('orders') as any)
+              .insert({
+                order_number: reference,
+                profile_id: user.id,
+                status: 'processing',
+                payment_status: 'paid',
+                fulfillment_status: 'unfulfilled',
+                currency: 'USD',
+                subtotal_amount: Math.round(subtotal * 100),
+                shipping_amount: Math.round(shippingCost * 100),
+                total_amount: Math.round(total * 100),
+                shipping_address: {
+                  fullName: fullName.trim(),
+                  street: street.trim(),
+                  city: city.trim(),
+                  state: stateName.trim(),
+                },
+                billing_address: {
+                  fullName: fullName.trim(),
+                  street: street.trim(),
+                  city: city.trim(),
+                  state: stateName.trim(),
+                },
+                contact_email: email.trim(),
+                payment_method: 'paystack',
+              })
+              .select('id')
+              .single()
+
+            if (!orderErr && orderData?.id) {
+              const orderItems = cart.map((item) => ({
+                order_id: orderData.id,
+                sku: item.productId,
+                name: item.name,
+                color_name: item.color || 'Standard',
+                unit_amount: Math.round(item.price * 100),
+                quantity: item.quantity,
+                total_amount: Math.round(item.price * item.quantity * 100),
+                image_url: item.image,
+              }))
+              await (supabase.from('order_items') as any).insert(orderItems)
+            }
+          } catch (dbErr) {
+            console.warn('[Checkout] Note: Could not insert order into Supabase:', dbErr)
+          }
+        }
+
+        // 2. Clear cart across both mobile and web in real-time
+        await clearCart()
+
+        setOrderCode(reference)
+        setIsSuccess(true)
+      } else {
+        if (browserResult.type === 'cancel' || browserResult.type === 'dismiss') {
+          Alert.alert(
+            'Payment Incomplete',
+            'You closed the Paystack checkout before completing payment. Your cart items are still saved.'
+          )
+        } else {
+          Alert.alert(
+            'Payment Verification Failed',
+            verifyResult.error || 'The payment was not marked as successful by Paystack. Please try again.'
+          )
+        }
+      }
+    } catch (err: any) {
+      console.error('[Checkout] Error during payment flow:', err)
+      Alert.alert('Checkout Error', err?.message || 'An unexpected error occurred during checkout.')
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   if (isSuccess) {
@@ -62,10 +208,10 @@ export const CheckoutScreen: React.FC<CheckoutScreenProps> = ({
           <CheckCircle2 size={54} color="#38CB89" />
         </View>
         <Text style={styles.successTitle}>Thank you!</Text>
-        <Text style={styles.successSubtitle}>Your order has been received</Text>
+        <Text style={styles.successSubtitle}>Your order has been placed successfully</Text>
         <Text style={styles.orderCode}>{orderCode}</Text>
         <Text style={styles.successDesc}>
-          Your shopping cart has been cleared on all your devices. A confirmation email has been sent to{' '}
+          Payment of <Text style={{ fontWeight: '700', color: '#141718' }}>${total.toFixed(2)}</Text> verified via Paystack. Your shopping cart has been cleared on all devices and a confirmation has been sent to{' '}
           <Text style={{ fontWeight: '700', color: '#141718' }}>{email || 'your email'}</Text>.
         </Text>
 
@@ -153,9 +299,11 @@ export const CheckoutScreen: React.FC<CheckoutScreenProps> = ({
             activeOpacity={0.8}
           >
             <View style={styles.paymentOptionLeft}>
-              <CreditCard size={20} color="#141718" />
+              <View style={styles.paystackBadge}>
+                <CreditCard size={18} color="#141718" />
+              </View>
               <View>
-                <Text style={styles.paymentName}>Paystack Sandbox</Text>
+                <Text style={styles.paymentName}>Paystack Secure Checkout</Text>
                 <Text style={styles.paymentSub}>Cards, Bank Transfer, USSD</Text>
               </View>
             </View>
@@ -170,7 +318,7 @@ export const CheckoutScreen: React.FC<CheckoutScreenProps> = ({
 
         {/* ORDER REVIEW */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Order Summary ({cart.length} items)</Text>
+          <Text style={styles.sectionTitle}>Order Summary ({cart.length} item{cart.length > 1 ? 's' : ''})</Text>
           <View style={styles.summaryBox}>
             <View style={styles.summaryRow}>
               <Text style={styles.summaryLabel}>Subtotal</Text>
@@ -190,6 +338,14 @@ export const CheckoutScreen: React.FC<CheckoutScreenProps> = ({
           </View>
         </View>
 
+        {/* PAYSTACK NOTICE */}
+        <View style={styles.securityNotice}>
+          <Lock size={15} color="#15803D" />
+          <Text style={styles.securityNoticeText}>
+            You will be redirected to the secure Paystack checkout modal to complete payment.
+          </Text>
+        </View>
+
         <TouchableOpacity
           style={styles.submitButton}
           onPress={handlePlaceOrder}
@@ -199,7 +355,7 @@ export const CheckoutScreen: React.FC<CheckoutScreenProps> = ({
           {isSubmitting ? (
             <ActivityIndicator color="#FFFFFF" />
           ) : (
-            <Text style={styles.submitButtonText}>Place Order (${total.toFixed(2)})</Text>
+            <Text style={styles.submitButtonText}>Pay with Paystack (${total.toFixed(2)})</Text>
           )}
         </TouchableOpacity>
 
@@ -250,11 +406,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#E8ECEF',
     borderRadius: 8,
-    paddingHorizontal: 14,
+    paddingHorizontal: 16,
     fontSize: 14,
     color: '#141718',
-    backgroundColor: '#FAFAFA',
-    marginBottom: 10,
+    marginBottom: 12,
   },
   row: {
     flexDirection: 'row',
@@ -263,24 +418,31 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    padding: 16,
     borderWidth: 1,
     borderColor: '#E8ECEF',
-    borderRadius: 8,
-    padding: 14,
-    backgroundColor: '#FAFAFA',
+    borderRadius: 10,
   },
   paymentOptionActive: {
     borderColor: '#141718',
-    backgroundColor: '#F3F5F7',
+    backgroundColor: '#F9FAFB',
   },
   paymentOptionLeft: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
   },
+  paystackBadge: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#F3F4F6',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   paymentName: {
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: 15,
+    fontWeight: '700',
     color: '#141718',
   },
   paymentSub: {
@@ -289,19 +451,19 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   radio: {
-    width: 18,
-    height: 18,
-    borderRadius: 9,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
     borderWidth: 2,
-    borderColor: '#6C7275',
+    borderColor: '#E8ECEF',
   },
   radioActive: {
     borderColor: '#141718',
-    backgroundColor: '#141718',
+    borderWidth: 6,
   },
   summaryBox: {
-    backgroundColor: '#F3F5F7',
-    borderRadius: 8,
+    backgroundColor: '#F9FAFB',
+    borderRadius: 10,
     padding: 16,
   },
   summaryRow: {
@@ -321,48 +483,63 @@ const styles = StyleSheet.create({
   divider: {
     height: 1,
     backgroundColor: '#E8ECEF',
-    marginVertical: 10,
+    marginVertical: 12,
   },
   totalRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
   },
   totalLabel: {
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: '700',
     color: '#141718',
   },
   totalVal: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '700',
     color: '#141718',
+  },
+  securityNotice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F0FDF4',
+    padding: 12,
+    borderRadius: 8,
+    gap: 8,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#DCFCE7',
+  },
+  securityNoticeText: {
+    fontSize: 12,
+    color: '#166534',
+    flex: 1,
+    lineHeight: 16,
   },
   submitButton: {
     height: 52,
     backgroundColor: '#141718',
-    borderRadius: 8,
+    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 8,
   },
   submitButtonText: {
     color: '#FFFFFF',
-    fontSize: 15,
-    fontWeight: '600',
+    fontSize: 16,
+    fontWeight: '700',
   },
   successContainer: {
     flex: 1,
     backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 32,
+    padding: 24,
   },
   successIconCircle: {
-    width: 88,
-    height: 88,
-    borderRadius: 44,
-    backgroundColor: '#F0FDF4',
+    width: 90,
+    height: 90,
+    borderRadius: 45,
+    backgroundColor: '#DCFCE7',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 20,
@@ -375,36 +552,39 @@ const styles = StyleSheet.create({
   },
   successSubtitle: {
     fontSize: 16,
-    color: '#6C7275',
-    marginBottom: 12,
+    color: '#38CB89',
+    fontWeight: '600',
+    marginBottom: 16,
   },
   orderCode: {
-    fontSize: 18,
-    fontWeight: '800',
+    fontSize: 15,
+    fontWeight: '700',
     color: '#141718',
-    letterSpacing: 1,
-    backgroundColor: '#F3F5F7',
+    backgroundColor: '#F3F4F6',
     paddingHorizontal: 16,
     paddingVertical: 8,
-    borderRadius: 6,
+    borderRadius: 8,
     marginBottom: 16,
+    letterSpacing: 0.5,
   },
   successDesc: {
     fontSize: 14,
     color: '#6C7275',
     textAlign: 'center',
-    lineHeight: 20,
+    lineHeight: 22,
     marginBottom: 32,
   },
   continueButton: {
+    width: '100%',
+    height: 52,
     backgroundColor: '#141718',
-    paddingHorizontal: 28,
-    paddingVertical: 14,
-    borderRadius: 8,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   continueButtonText: {
     color: '#FFFFFF',
-    fontSize: 15,
-    fontWeight: '600',
+    fontSize: 16,
+    fontWeight: '700',
   },
 })

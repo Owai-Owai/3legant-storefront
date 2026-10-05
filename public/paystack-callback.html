@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>3legant - Processing Payment...</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      margin: 0;
+      background-color: #ffffff;
+      color: #141718;
+      text-align: center;
+      padding: 24px;
+      box-sizing: border-box;
+    }
+    .spinner {
+      width: 44px;
+      height: 44px;
+      border: 3px solid #E8ECEF;
+      border-top-color: #38CB89;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin-bottom: 24px;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    h2 {
+      font-size: 22px;
+      font-weight: 700;
+      margin: 0 0 8px;
+    }
+    p {
+      color: #6C7275;
+      font-size: 14px;
+      margin: 0 0 24px;
+    }
+    .btn {
+      display: none;
+      background-color: #141718;
+      color: #ffffff;
+      padding: 14px 28px;
+      border-radius: 8px;
+      font-size: 15px;
+      font-weight: 600;
+      text-decoration: none;
+      border: none;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <div class="spinner"></div>
+  <h2>Payment Processed!</h2>
+  <p id="status-text">Returning you to the 3legant mobile app...</p>
+  <button id="return-btn" class="btn">Open 3legant App</button>
+
+  <script>
+    (function() {
+      var search = window.location.search || '';
+      var destination = '3legant://checkout-complete' + search;
+
+      function go() {
+        window.location.href = destination;
+      }
+
+      // Try instant redirect to app
+      go();
+
+      // Show fallback button after 800ms
+      setTimeout(function() {
+        var btn = document.getElementById('return-btn');
+        if (btn) {
+          btn.style.display = 'inline-block';
+          btn.onclick = go;
+        }
+        var status = document.getElementById('status-text');
+        if (status) {
+          status.innerText = "Tap the button below to return to your order confirmation:";
+        }
+      }, 800);
+    })();
+  </script>
+</body>
+</html>
