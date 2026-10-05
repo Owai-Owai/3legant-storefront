@@ -336,6 +336,59 @@ function Modal({
   )
 }
 
+function MobileAuthCallbackBridge() {
+  useEffect(() => {
+    const hash = typeof window !== "undefined" ? window.location.hash || "" : ""
+    const search = typeof window !== "undefined" ? window.location.search || "" : ""
+    const rawTokens = hash ? hash.replace(/^#/, "") : ""
+    const query = search ? search.replace(/^\?/, "") : ""
+    const payload = rawTokens || query
+
+    const intentUrl = `intent://auth/callback?${payload}#Intent;scheme=3legant;package=com.threelegant.storefront;end`
+    const schemeUrl = `3legant://auth/callback?${payload}`
+
+    try {
+      window.location.replace(intentUrl)
+    } catch {
+      window.location.href = schemeUrl
+    }
+
+    const timer = setTimeout(() => {
+      try {
+        window.location.href = schemeUrl
+      } catch {}
+    }, 400)
+
+    return () => clearTimeout(timer)
+  }, [])
+
+  const hash = typeof window !== "undefined" ? window.location.hash || "" : ""
+  const search = typeof window !== "undefined" ? window.location.search || "" : ""
+  const payload = (hash ? hash.replace(/^#/, "") : "") || (search ? search.replace(/^\?/, "") : "")
+  const intentUrl = `intent://auth/callback?${payload}#Intent;scheme=3legant;package=com.threelegant.storefront;end`
+  const schemeUrl = `3legant://auth/callback?${payload}`
+
+  return (
+    <div className="flex min-h-dvh flex-col items-center justify-center bg-white text-center p-6">
+      <div className="size-10 animate-spin rounded-full border-4 border-gray-200 border-t-black mb-4" />
+      <h2 className="text-xl font-bold">Authentication Successful!</h2>
+      <p className="text-sm text-gray-500 mt-2 mb-6">Returning you to the 3legant mobile app...</p>
+      <a
+        href={intentUrl}
+        className="inline-block rounded-lg bg-black px-6 py-3 font-semibold text-white no-underline shadow hover:bg-neutral-800"
+      >
+        Open 3legant App
+      </a>
+      <a
+        href={schemeUrl}
+        className="mt-3 text-xs text-neutral-500 underline"
+      >
+        Tap here if app did not open automatically
+      </a>
+    </div>
+  )
+}
+
 function Storefront() {
   const navigate = useNavigate()
   const { pathname, hash } = useLocation()
@@ -721,13 +774,7 @@ function Storefront() {
   if (pathname === "/signup") return <SignUpPage onPreviewLogin={previewLogin} />
   if (pathname === "/signin") return <SignInPage onPreviewLogin={previewLogin} />
   if (pathname === "/auth/callback" || pathname === "/auth-callback.html") {
-    return (
-      <div className="flex min-h-dvh flex-col items-center justify-center bg-white text-center p-6">
-        <div className="size-10 animate-spin rounded-full border-4 border-gray-200 border-t-black mb-4" />
-        <h2 className="text-xl font-bold">Signing you into 3legant...</h2>
-        <p className="text-sm text-gray-500 mt-2">Returning you to the app</p>
-      </div>
-    )
+    return <MobileAuthCallbackBridge />
   }
 
   return (

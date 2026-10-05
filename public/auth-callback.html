@@ -42,7 +42,7 @@
       margin: 0 0 24px;
     }
     .btn {
-      display: none;
+      display: inline-block;
       background-color: #141718;
       color: #ffffff;
       padding: 14px 28px;
@@ -50,8 +50,15 @@
       font-size: 15px;
       font-weight: 600;
       text-decoration: none;
-      border: none;
       cursor: pointer;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    }
+    .sub-link {
+      margin-top: 14px;
+      font-size: 13px;
+      color: #6C7275;
+      text-decoration: underline;
+      display: inline-block;
     }
   </style>
 </head>
@@ -59,7 +66,8 @@
   <div class="spinner"></div>
   <h2>Authentication Successful!</h2>
   <p id="status-text">Returning you to the 3legant mobile app...</p>
-  <button id="return-btn" class="btn">Open 3legant App</button>
+  <a id="return-btn" class="btn" href="#">Open 3legant App</a>
+  <a id="alt-btn" class="sub-link" href="#">Tap here if app didn't open</a>
 
   <script>
     (function() {
@@ -68,49 +76,54 @@
       var urlParams = new URLSearchParams(search);
       var appRedirect = urlParams.get('app_redirect');
 
-      // Tokens can be in hash (#access_token=...) or query (?code=...)
       var rawTokens = hash ? hash.replace(/^#/, '') : '';
+      var query = search ? search.replace(/^\?/, '') : '';
+      var payload = rawTokens || query;
 
-      var destination = '';
+      var intentUrl = '';
+      var schemeUrl = '';
 
       if (appRedirect) {
         var base = decodeURIComponent(appRedirect);
-        if (rawTokens) {
-          var joinChar = base.indexOf('#') !== -1 ? '&' : '#';
-          destination = base + joinChar + rawTokens;
-        } else {
-          // If code is in search query
-          urlParams.delete('app_redirect');
-          var restQuery = urlParams.toString();
-          var joinQuery = base.indexOf('?') !== -1 ? '&' : '?';
-          destination = base + (restQuery ? (joinQuery + restQuery) : '');
-        }
+        var joinChar = base.indexOf('?') !== -1 ? '&' : '?';
+        schemeUrl = base + (payload ? (joinChar + payload) : '');
+        intentUrl = schemeUrl;
       } else {
-        // Fallback to custom mobile scheme
-        destination = '3legant://auth/callback' + (hash || search);
+        // Android Intent syntax ensures Chrome launches the installed 3legant APK directly
+        intentUrl = 'intent://auth/callback?' + payload + '#Intent;scheme=3legant;package=com.threelegant.storefront;end';
+        schemeUrl = '3legant://auth/callback?' + payload;
       }
 
-      function go() {
-        if (destination) {
-          window.location.href = destination;
-        }
+      var returnBtn = document.getElementById('return-btn');
+      var altBtn = document.getElementById('alt-btn');
+
+      if (returnBtn) returnBtn.href = intentUrl;
+      if (altBtn) altBtn.href = schemeUrl;
+
+      // 1. Try automatic navigation
+      try {
+        window.location.replace(intentUrl);
+      } catch (e) {
+        try {
+          window.location.href = schemeUrl;
+        } catch (err) {}
       }
 
-      // Try instant redirect
-      go();
-
-      // Show fallback button after 800ms if browser blocked automatic redirect
+      // 2. Fallback attempt via custom scheme after 400ms
       setTimeout(function() {
-        var btn = document.getElementById('return-btn');
-        if (btn) {
-          btn.style.display = 'inline-block';
-          btn.onclick = go;
+        try {
+          window.location.href = schemeUrl;
+        } catch (e) {}
+      }, 400);
+
+      // 3. Fallback click simulation after 600ms
+      setTimeout(function() {
+        if (returnBtn) {
+          try {
+            returnBtn.click();
+          } catch (e) {}
         }
-        var status = document.getElementById('status-text');
-        if (status) {
-          status.innerText = "Tap the button below to return to the app:";
-        }
-      }, 800);
+      }, 600);
     })();
   </script>
 </body>
