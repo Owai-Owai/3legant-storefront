@@ -17,6 +17,7 @@ import {
   Lock,
 } from 'lucide-react-native'
 import * as WebBrowser from 'expo-web-browser'
+import * as Linking from 'expo-linking'
 import { useCart } from '../context/CartContext'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
@@ -95,13 +96,20 @@ export const CheckoutScreen: React.FC<CheckoutScreenProps> = ({
     // Generate unique order reference
     const reference = `3LEG_${Date.now()}_${Math.floor(1000 + Math.random() * 9000)}`
 
+    // Generate dynamic return deep link for this device (works seamlessly in Expo Go and standalone)
+    const mobileReturnUrl = Linking.createURL('checkout-complete')
+    const callbackUrl = `${PAYSTACK_CALLBACK_URL}?app_redirect=${encodeURIComponent(mobileReturnUrl)}`
+
     try {
       console.log('[Checkout] Initializing Paystack transaction with reference:', reference)
+      console.log('[Checkout] Using dynamic return URL:', mobileReturnUrl)
+
       const initResult = await initializePaystackCheckout({
         email: email.trim(),
         amountUSD: total,
         reference,
         fullName: fullName.trim(),
+        callbackUrl,
       })
 
       if (!initResult.success || !initResult.authorizationUrl) {
@@ -110,13 +118,13 @@ export const CheckoutScreen: React.FC<CheckoutScreenProps> = ({
         return
       }
 
-      console.log('[Checkout] Opening Paystack authorization URL in in-app browser...')
+      console.log('[Checkout] Opening Paystack authorization URL in in-app browser session...')
       const browserResult = await WebBrowser.openAuthSessionAsync(
         initResult.authorizationUrl,
-        PAYSTACK_CALLBACK_URL
+        mobileReturnUrl
       )
 
-      console.log('[Checkout] In-app browser closed with result:', browserResult.type)
+      console.log('[Checkout] In-app browser returned with result:', browserResult.type)
 
       // Verify payment directly with Paystack API
       console.log('[Checkout] Verifying transaction on Paystack:', reference)

@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>3legant - Processing Payment...</title>
+  <title>3legant - Payment Successful</title>
   <style>
     body {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -64,16 +64,32 @@
   <script>
     (function() {
       var search = window.location.search || '';
-      var destination = '3legant://checkout-complete' + search;
+      var urlParams = new URLSearchParams(search);
+      var appRedirect = urlParams.get('app_redirect');
+
+      var destination = '';
+
+      if (appRedirect) {
+        var base = decodeURIComponent(appRedirect);
+        urlParams.delete('app_redirect');
+        var restQuery = urlParams.toString();
+        var joinChar = base.indexOf('?') !== -1 ? '&' : '?';
+        destination = base + (restQuery ? (joinChar + restQuery) : '');
+      } else {
+        // Fallback for standalone builds or custom scheme
+        destination = '3legant://checkout-complete' + search;
+      }
 
       function go() {
-        window.location.href = destination;
+        if (destination) {
+          window.location.href = destination;
+        }
       }
 
       // Try instant redirect to app
       go();
 
-      // Show fallback button after 800ms
+      // Show fallback button after 600ms if automatic redirection was paused
       setTimeout(function() {
         var btn = document.getElementById('return-btn');
         if (btn) {
@@ -82,9 +98,9 @@
         }
         var status = document.getElementById('status-text');
         if (status) {
-          status.innerText = "Tap the button below to return to your order confirmation:";
+          status.innerText = "Payment completed! Tap the button below to return to the app:";
         }
-      }, 800);
+      }, 600);
     })();
   </script>
 </body>

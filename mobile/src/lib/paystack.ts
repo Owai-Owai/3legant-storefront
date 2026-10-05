@@ -9,6 +9,7 @@ export interface PaystackInitParams {
   amountUSD: number
   reference: string
   fullName?: string
+  callbackUrl?: string
 }
 
 export interface PaystackInitResult {
@@ -43,7 +44,7 @@ export async function initializePaystackCheckout(
       amount: amountInSubunits,
       currency: PAYSTACK_CURRENCY,
       reference: params.reference,
-      callback_url: PAYSTACK_CALLBACK_URL,
+      callback_url: params.callbackUrl || PAYSTACK_CALLBACK_URL,
       metadata: {
         customer_name: params.fullName || '',
         platform: '3legant_mobile_app',
