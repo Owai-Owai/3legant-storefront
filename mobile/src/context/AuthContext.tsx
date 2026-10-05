@@ -59,18 +59,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const urlStr = event.url
       if (!urlStr || (!urlStr.includes('access_token') && !urlStr.includes('code'))) return
 
-      const hashIdx = urlStr.indexOf('#')
       const queryIdx = urlStr.indexOf('?')
-      let paramsString = ''
+      const hashIdx = urlStr.indexOf('#')
+
+      let queryStr = ''
+      let hashStr = ''
+
+      if (queryIdx !== -1) {
+        queryStr = urlStr.substring(
+          queryIdx + 1,
+          hashIdx !== -1 && hashIdx > queryIdx ? hashIdx : undefined
+        )
+      }
       if (hashIdx !== -1) {
-        paramsString = urlStr.substring(hashIdx + 1)
-      } else if (queryIdx !== -1) {
-        paramsString = urlStr.substring(queryIdx + 1)
+        hashStr = urlStr.substring(hashIdx + 1)
       }
 
-      const params = new URLSearchParams(paramsString)
-      const accessToken = params.get('access_token')
-      const refreshToken = params.get('refresh_token')
+      const queryParams = new URLSearchParams(queryStr)
+      const hashParams = new URLSearchParams(hashStr)
+
+      const accessToken = queryParams.get('access_token') || hashParams.get('access_token')
+      const refreshToken = queryParams.get('refresh_token') || hashParams.get('refresh_token')
 
       if (accessToken && refreshToken) {
         const { data: sessionData } = await supabase.auth.setSession({
@@ -80,6 +89,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (sessionData.session) {
           setSession(sessionData.session)
           setUser(sessionData.session.user)
+        }
+      } else {
+        const code = queryParams.get('code') || hashParams.get('code')
+        if (code) {
+          const { data: exchangeData } = await supabase.auth.exchangeCodeForSession(code)
+          if (exchangeData.session) {
+            setSession(exchangeData.session)
+            setUser(exchangeData.session.user)
+          }
         }
       }
     }
@@ -149,19 +167,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const urlStr = authSessionResult.url
         console.log('[AuthContext] Returned redirect URL:', urlStr)
 
-        const hashIdx = urlStr.indexOf('#')
         const queryIdx = urlStr.indexOf('?')
+        const hashIdx = urlStr.indexOf('#')
 
-        let paramsString = ''
+        let queryStr = ''
+        let hashStr = ''
+
+        if (queryIdx !== -1) {
+          queryStr = urlStr.substring(
+            queryIdx + 1,
+            hashIdx !== -1 && hashIdx > queryIdx ? hashIdx : undefined
+          )
+        }
         if (hashIdx !== -1) {
-          paramsString = urlStr.substring(hashIdx + 1)
-        } else if (queryIdx !== -1) {
-          paramsString = urlStr.substring(queryIdx + 1)
+          hashStr = urlStr.substring(hashIdx + 1)
         }
 
-        const params = new URLSearchParams(paramsString)
-        const accessToken = params.get('access_token')
-        const refreshToken = params.get('refresh_token')
+        const queryParams = new URLSearchParams(queryStr)
+        const hashParams = new URLSearchParams(hashStr)
+
+        const accessToken = queryParams.get('access_token') || hashParams.get('access_token')
+        const refreshToken = queryParams.get('refresh_token') || hashParams.get('refresh_token')
 
         if (accessToken && refreshToken) {
           const { data: sessionData, error: sessionError } = await supabase.auth.setSession({

@@ -337,54 +337,113 @@ function Modal({
 }
 
 function MobileAuthCallbackBridge() {
-  useEffect(() => {
-    const hash = typeof window !== "undefined" ? window.location.hash || "" : ""
-    const search = typeof window !== "undefined" ? window.location.search || "" : ""
-    const rawTokens = hash ? hash.replace(/^#/, "") : ""
-    const query = search ? search.replace(/^\?/, "") : ""
-    const payload = rawTokens || query
+  const [opening, setOpening] = useState(false)
+  const [status, setStatus] = useState("Returning you to the 3legant mobile app...")
 
-    const intentUrl = `intent://auth/callback?${payload}#Intent;scheme=3legant;package=com.threelegant.storefront;end`
-    const schemeUrl = `3legant://auth/callback?${payload}`
+  const { intentUrl, schemeUrl, primaryUrl } = useMemo(() => {
+    if (typeof window === "undefined") {
+      return { intentUrl: "", schemeUrl: "", primaryUrl: "" }
+    }
+    const hash = window.location.hash ? window.location.hash.substring(1) : ""
+    const search = window.location.search ? window.location.search.substring(1) : ""
+    const hashParams = new URLSearchParams(hash)
+    const searchParams = new URLSearchParams(search)
 
-    try {
-      window.location.replace(intentUrl)
-    } catch {
-      window.location.href = schemeUrl
+    const appRedirect = searchParams.get("app_redirect") || hashParams.get("app_redirect") || ""
+
+    const cleanParams = new URLSearchParams()
+    hashParams.forEach((v, k) => {
+      if (k !== "app_redirect") cleanParams.set(k, v)
+    })
+    searchParams.forEach((v, k) => {
+      if (k !== "app_redirect") cleanParams.set(k, v)
+    })
+
+    const payload = cleanParams.toString()
+    const isAndroid = /Android/i.test(navigator.userAgent)
+    const isExpo = appRedirect && appRedirect.startsWith("exp://")
+
+    let sUrl = ""
+    let iUrl = ""
+
+    if (isExpo) {
+      const base = decodeURIComponent(appRedirect)
+      const joinChar = base.includes("?") ? "&" : "?"
+      sUrl = base + (payload ? joinChar + payload : "")
+      iUrl = sUrl
+    } else {
+      sUrl = `3legant://auth/callback${payload ? `?${payload}` : ""}`
+      iUrl = `intent://auth/callback${payload ? `?${payload}` : ""}#Intent;scheme=3legant;package=com.threelegant.storefront;action=android.intent.action.VIEW;category=android.intent.category.BROWSABLE;end`
     }
 
-    const timer = setTimeout(() => {
-      try {
-        window.location.href = schemeUrl
-      } catch {}
-    }, 400)
-
-    return () => clearTimeout(timer)
+    return {
+      intentUrl: iUrl,
+      schemeUrl: sUrl,
+      primaryUrl: isAndroid ? iUrl : sUrl,
+    }
   }, [])
 
-  const hash = typeof window !== "undefined" ? window.location.hash || "" : ""
-  const search = typeof window !== "undefined" ? window.location.search || "" : ""
-  const payload = (hash ? hash.replace(/^#/, "") : "") || (search ? search.replace(/^\?/, "") : "")
-  const intentUrl = `intent://auth/callback?${payload}#Intent;scheme=3legant;package=com.threelegant.storefront;end`
-  const schemeUrl = `3legant://auth/callback?${payload}`
+  const launchApp = useCallback(
+    (preferScheme = false) => {
+      const target = preferScheme ? schemeUrl : primaryUrl
+      if (!target) return
+
+      setOpening(true)
+      setStatus("Opening 3legant app...")
+
+      try {
+        window.location.href = target
+      } catch (e) {
+        console.error(e)
+      }
+
+      setTimeout(() => {
+        try {
+          window.location.href = schemeUrl
+        } catch {}
+        setOpening(false)
+      }, 600)
+    },
+    [primaryUrl, schemeUrl]
+  )
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      launchApp(false)
+    }, 250)
+    return () => clearTimeout(timer)
+  }, [launchApp])
 
   return (
     <div className="flex min-h-dvh flex-col items-center justify-center bg-white text-center p-6">
-      <div className="size-10 animate-spin rounded-full border-4 border-gray-200 border-t-black mb-4" />
-      <h2 className="text-xl font-bold">Authentication Successful!</h2>
-      <p className="text-sm text-gray-500 mt-2 mb-6">Returning you to the 3legant mobile app...</p>
-      <a
-        href={intentUrl}
-        className="inline-block rounded-lg bg-black px-6 py-3 font-semibold text-white no-underline shadow hover:bg-neutral-800"
-      >
-        Open 3legant App
-      </a>
-      <a
-        href={schemeUrl}
-        className="mt-3 text-xs text-neutral-500 underline"
-      >
-        Tap here if app did not open automatically
-      </a>
+      <div className="size-11 animate-spin rounded-full border-4 border-gray-200 border-t-black mb-4" />
+      <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-gray-100 text-gray-800 rounded-full text-xs font-semibold mb-3">
+        ✓ Tokens Verified
+      </div>
+      <h2 className="text-2xl font-bold text-[#141718]">Authentication Successful!</h2>
+      <p className="text-sm text-gray-500 mt-2 mb-6 max-w-sm">{status}</p>
+
+      <div className="w-full max-w-xs flex flex-col gap-3">
+        <a
+          href={primaryUrl}
+          onClick={(e) => {
+            launchApp(false)
+          }}
+          className="w-full flex items-center justify-center h-13 rounded-lg bg-[#141718] px-6 text-base font-semibold text-white no-underline shadow-md active:scale-95 transition-transform hover:bg-neutral-800"
+        >
+          {opening ? "Opening 3legant..." : "Open 3legant App"}
+        </a>
+
+        <a
+          href={schemeUrl}
+          onClick={(e) => {
+            launchApp(true)
+          }}
+          className="w-full flex items-center justify-center h-11 rounded-lg border border-gray-200 text-sm font-semibold text-[#141718] no-underline active:bg-gray-50 transition-colors"
+        >
+          Direct Scheme Link (3legant://)
+        </a>
+      </div>
     </div>
   )
 }
